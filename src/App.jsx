@@ -188,24 +188,104 @@ setReport(response.data.report);
       </p>
     </div>
 
-   <div
-  style={{
-    background: "#f8fff8",
-    padding: "20px",
-    borderRadius: "15px",
-    marginBottom: "20px",
-  }}
->
-  <h3 style={{ color: "green" }}>
-    ✅ Strengths
-  </h3>
+            {/* Rubric Breakdown */}
+            {report.rubricBreakdown && (
+              <div 
+                style={{ 
+                  background: "#fff7fb", 
+                  padding: "20px", 
+                  borderRadius: "15px", 
+                  marginBottom: "20px" 
+                }}
+              >
+                <h3 style={{ color: "#ff4f87", marginTop: 0 }}>
+                  📋 Rubric Breakdown
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "10px" }}>
+                  {Object.entries(report.rubricBreakdown).map(([criterion, feedback]) => (
+                    <div 
+                      key={criterion} 
+                      style={{ 
+                        background: "#fff", 
+                        padding: "15px", 
+                        borderRadius: "10px", 
+                        border: "1px solid #ffd1df" 
+                      }}
+                    >
+                      <strong style={{ color: "#ff4f87", display: "block", marginBottom: "5px" }}>
+                        {criterion}
+                      </strong>
+                      <span style={{ fontSize: "14px", color: "#555" }}>
+                        {feedback}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-  <ul>
-    {report.strengths.map((item, index) => (
-      <li key={index}>{item}</li>
-    ))}
-  </ul>
-</div>
+            {/* Strengths */}
+            {report.strengths && report.strengths.length > 0 && (
+              <div
+                style={{
+                  background: "#f8fff8",
+                  padding: "20px",
+                  borderRadius: "15px",
+                  marginBottom: "20px",
+                }}
+              >
+                <h3 style={{ color: "green", marginTop: 0 }}>
+                  ✅ Strengths
+                </h3>
+                <ul>
+                  {report.strengths.map((item, index) => (
+                    <li key={index} style={{ marginBottom: "5px", color: "#333" }}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Weaknesses */}
+            {report.weaknesses && report.weaknesses.length > 0 && (
+              <div
+                style={{
+                  background: "#fff5f5",
+                  padding: "20px",
+                  borderRadius: "15px",
+                  marginBottom: "20px",
+                }}
+              >
+                <h3 style={{ color: "#e53e3e", marginTop: 0 }}>
+                  ❌ Areas for Improvement
+                </h3>
+                <ul>
+                  {report.weaknesses.map((item, index) => (
+                    <li key={index} style={{ marginBottom: "5px", color: "#333" }}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Suggestions */}
+            {report.suggestions && report.suggestions.length > 0 && (
+              <div
+                style={{
+                  background: "#f7fafc",
+                  padding: "20px",
+                  borderRadius: "15px",
+                  marginBottom: "20px",
+                }}
+              >
+                <h3 style={{ color: "#3182ce", marginTop: 0 }}>
+                  💡 Suggestions
+                </h3>
+                <ul>
+                  {report.suggestions.map((item, index) => (
+                    <li key={index} style={{ marginBottom: "5px", color: "#333" }}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
   </div>
 )}
