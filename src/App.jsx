@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
 function App() {
@@ -8,13 +8,55 @@ function App() {
   const [githubUrl, setGithubUrl] = useState("");
   const [message, setMessage] = useState("");
   const [report, setReport] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  const overallScore = report?.overallScore ?? null;
+  // UX Refactor States: "FORM", "LOADING", "REPORT"
+  const [appState, setAppState] = useState("FORM");
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [fadeMessage, setFadeMessage] = useState(true);
+  const [displayMessage, setDisplayMessage] = useState("Fetching repository...");
+
+  const titleInputRef = useRef(null);
+
+  const progressMessages = [
+    "Fetching repository...",
+    "Reading README...",
+    "Downloading source files...",
+    "Inspecting project structure...",
+    "Evaluating implementation...",
+    "Applying rubric...",
+    "Generating report..."
+  ];
+
+  // Rotate messages during LOADING state
+  useEffect(() => {
+    if (appState !== "LOADING") {
+      setFadeMessage(true);
+      setDisplayMessage(progressMessages[0]);
+      setMessageIndex(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setFadeMessage(false);
+      setTimeout(() => {
+        const nextIndex = (messageIndex + 1) % progressMessages.length;
+        setMessageIndex(nextIndex);
+        setDisplayMessage(progressMessages[nextIndex]);
+        setFadeMessage(true);
+      }, 300);
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [appState, messageIndex]);
 
   const handleEvaluate = async () => {
-    setLoading(true);
-    setMessage("⏳ Evaluating repository... This may take up to a minute.");
+    if (!githubUrl) {
+      setMessage("❌ GitHub URL is required.");
+      return;
+    }
+
+    setAppState("LOADING");
+    setMessage("");
     setReport(null);
 
     try {
@@ -29,15 +71,32 @@ function App() {
       );
 
       console.log(response.data);
-      setMessage("✅ Evaluation Complete");
-      setReport(response.data.report);
+      if (response.data && response.data.success && response.data.report) {
+        setReport(response.data.report);
+        setAppState("REPORT");
+      } else {
+        throw new Error(response.data.error || "Failed to retrieve evaluation report.");
+      }
     } catch (error) {
       console.error(error);
-      const errMsg = error.response?.data?.error || "Error Sending Data";
+      const errMsg = error.response?.data?.error || error.message || "Error Sending Data";
       setMessage(`❌ ${errMsg}`);
-    } finally {
-      setLoading(false);
+      setAppState("FORM");
     }
+  };
+
+  const handleReset = () => {
+    setReport(null);
+    setTitle("");
+    setDescription("");
+    setRubric("");
+    setGithubUrl("");
+    setMessage("");
+    setAppState("FORM");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => {
+      titleInputRef.current?.focus();
+    }, 100);
   };
 
   return (
@@ -63,119 +122,147 @@ function App() {
           boxShadow: "0 20px 50px rgba(255,182,193,0.3)",
         }}
       >
-        <h1
-          style={{
-            textAlign: "center",
-            color: "#ff4f87",
-            fontSize: "48px",
-            marginBottom: "10px",
-            fontWeight: "800",
-            letterSpacing: "-1px"
-          }}
-        >
-          RepoGrade
-        </h1>
+        {appState === "FORM" && (
+          <div className="fade-in">
+            <h1
+              style={{
+                textAlign: "center",
+                color: "#ff4f87",
+                fontSize: "48px",
+                marginBottom: "10px",
+                fontWeight: "800",
+                letterSpacing: "-1px"
+              }}
+            >
+              RepoGrade
+            </h1>
 
-        <p
-          style={{
-            textAlign: "center",
-            color: "#555",
-            fontSize: "18px",
-            marginBottom: "10px",
-            fontWeight: "500"
-          }}
-        >
-          AI-Powered GitHub Assignment Evaluator
-        </p>
+            <p
+              style={{
+                textAlign: "center",
+                color: "#555",
+                fontSize: "18px",
+                marginBottom: "10px",
+                fontWeight: "500"
+              }}
+            >
+              AI-Powered GitHub Assignment Evaluator
+            </p>
 
-        <p
-          style={{
-            textAlign: "center",
-            color: "#777",
-            fontSize: "14px",
-            lineHeight: "1.6",
-            marginBottom: "35px",
-          }}
-        >
-          Evaluate repositories instantly with detailed feedback,
-          rubric scoring, strengths, weaknesses and improvement suggestions.
-        </p>
+            <p
+              style={{
+                textAlign: "center",
+                color: "#777",
+                fontSize: "14px",
+                lineHeight: "1.6",
+                marginBottom: "35px",
+              }}
+            >
+              Evaluate repositories instantly with detailed feedback,
+              rubric scoring, strengths, weaknesses and improvement suggestions.
+            </p>
 
-        <input
-          placeholder="Assignment Title (e.g. React Todo App)"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          style={inputStyle}
-          disabled={loading}
-        />
+            <input
+              ref={titleInputRef}
+              placeholder="Assignment Title (e.g. React Todo App)"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              style={inputStyle}
+            />
 
-        <textarea
-          placeholder="Assignment Description (Describe the task instructions...)"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          style={textareaStyle}
-          disabled={loading}
-        />
+            <textarea
+              placeholder="Assignment Description (Describe the task instructions...)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={textareaStyle}
+            />
 
-        <textarea
-          placeholder="Evaluation Rubric (e.g. Correctness: 40%, Code Quality: 30%, Documentation: 20%, Edge Cases: 10%)"
-          value={rubric}
-          onChange={(e) => setRubric(e.target.value)}
-          style={textareaStyle}
-          disabled={loading}
-        />
+            <textarea
+              placeholder="Evaluation Rubric (e.g. Correctness: 40%, Code Quality: 30%, Documentation: 20%, Edge Cases: 10%)"
+              value={rubric}
+              onChange={(e) => setRubric(e.target.value)}
+              style={textareaStyle}
+            />
 
-        <input
-          placeholder="GitHub Repository URL (e.g. https://github.com/owner/repo)"
-          value={githubUrl}
-          onChange={(e) => setGithubUrl(e.target.value)}
-          style={inputStyle}
-          disabled={loading}
-        />
+            <input
+              placeholder="GitHub Repository URL (e.g. https://github.com/owner/repo)"
+              value={githubUrl}
+              onChange={(e) => setGithubUrl(e.target.value)}
+              style={inputStyle}
+            />
 
-        <button
-          onClick={handleEvaluate}
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "16px",
-            border: "none",
-            borderRadius: "15px",
-            background: loading 
-              ? "#cccccc"
-              : "linear-gradient(135deg,#ff6fa5,#ff9ec4)",
-            color: "white",
-            fontSize: "18px",
-            fontWeight: "bold",
-            cursor: loading ? "not-allowed" : "pointer",
-            marginTop: "15px",
-            boxShadow: loading ? "none" : "0 8px 20px rgba(255,111,165,0.3)",
-            transition: "all 0.2s ease"
-          }}
-        >
-          {loading ? "⏳ Evaluating Repository..." : "🚀 Evaluate Repository"}
-        </button>
+            <button
+              onClick={handleEvaluate}
+              style={{
+                width: "100%",
+                padding: "16px",
+                border: "none",
+                borderRadius: "15px",
+                background: "linear-gradient(135deg,#ff6fa5,#ff9ec4)",
+                color: "white",
+                fontSize: "18px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                marginTop: "15px",
+                boxShadow: "0 8px 20px rgba(255,111,165,0.3)",
+                transition: "all 0.2s ease"
+              }}
+            >
+              🚀 Evaluate Repository
+            </button>
 
-        {message && (
-          <div
-            style={{
-              marginTop: "20px",
-              padding: "12px",
-              borderRadius: "12px",
-              background: message.startsWith("❌") ? "#fff5f5" : message.startsWith("⏳") ? "#fffaf0" : "#f0fff4",
-              border: message.startsWith("❌") ? "1px solid #fed7d7" : message.startsWith("⏳") ? "1px solid #feebc8" : "1px solid #c6f6d5",
-              textAlign: "center",
-              color: message.startsWith("❌") ? "#c53030" : message.startsWith("⏳") ? "#dd6b20" : "#22543d",
-              fontWeight: "bold",
-            }}
-          >
-            {message}
+            {message && (
+              <div
+                style={{
+                  marginTop: "20px",
+                  padding: "12px",
+                  borderRadius: "12px",
+                  background: "#fff5f5",
+                  border: "1px solid #fed7d7",
+                  textAlign: "center",
+                  color: "#c53030",
+                  fontWeight: "bold",
+                }}
+              >
+                {message}
+              </div>
+            )}
           </div>
         )}
 
-        {report && (
-          <div style={{ marginTop: "40px" }}>
+        {appState === "LOADING" && (
+          <div className="fade-in" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 10px" }}>
+            <svg className="float-icon" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ff4f87" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: "20px" }}>
+              <path d="M6 3v12" />
+              <circle cx="18" cy="6" r="3" />
+              <circle cx="6" cy="18" r="3" />
+              <path d="M18 9a9 9 0 0 1-9 9" />
+              <circle cx="9" cy="9" r="3" />
+            </svg>
             
+            <div className="spin-loader" style={{ marginBottom: "25px" }}></div>
+            
+            <h2 style={{ color: "#ff4f87", fontSize: "28px", fontWeight: "800", marginBottom: "12px", letterSpacing: "-0.5px" }}>
+              Analyzing Repository
+            </h2>
+            
+            <p style={{
+              color: "#666",
+              fontSize: "16px",
+              fontWeight: "600",
+              minHeight: "24px",
+              opacity: fadeMessage ? 1 : 0,
+              transform: fadeMessage ? "translateY(0)" : "translateY(5px)",
+              transition: "all 0.3s ease",
+              textAlign: "center"
+            }}>
+              {displayMessage}
+            </p>
+          </div>
+        )}
+
+        {appState === "REPORT" && report && (
+          <div className="fade-in">
             {/* Header: Score & Grade */}
             <div
               style={{
@@ -365,7 +452,7 @@ function App() {
                   background: "#f0f7ff",
                   padding: "20px",
                   borderRadius: "20px",
-                  marginBottom: "20px",
+                  marginBottom: "35px",
                   border: "1px solid #c3ddfd"
                 }}
               >
@@ -380,6 +467,25 @@ function App() {
               </div>
             )}
 
+            {/* Reset Button */}
+            <button
+              onClick={handleReset}
+              style={{
+                width: "100%",
+                padding: "16px",
+                border: "none",
+                borderRadius: "15px",
+                background: "linear-gradient(135deg,#ff6fa5,#ff9ec4)",
+                color: "white",
+                fontSize: "18px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                boxShadow: "0 8px 20px rgba(255,111,165,0.3)",
+                transition: "all 0.2s ease"
+              }}
+            >
+              🔄 Evaluate Another Repository
+            </button>
           </div>
         )}
       </div>
