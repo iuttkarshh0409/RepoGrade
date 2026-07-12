@@ -180,21 +180,22 @@ function App() {
             <div
               style={{
                 textAlign: "center",
-                padding: "25px",
+                padding: "30px 25px",
                 background: "linear-gradient(135deg, #fff7fb, #ffeef5)",
-                borderRadius: "20px",
-                marginBottom: "30px",
+                borderRadius: "25px",
+                marginBottom: "35px",
                 border: "1px solid #ffd1df",
-                boxShadow: "0 4px 15px rgba(255,182,193,0.15)"
+                boxShadow: "0 6px 20px rgba(255,182,193,0.2)"
               }}
             >
               <h3
                 style={{
                   color: "#ff4f87",
-                  marginBottom: "8px",
-                  fontSize: "16px",
+                  marginBottom: "10px",
+                  fontSize: "15px",
                   textTransform: "uppercase",
-                  letterSpacing: "1.5px"
+                  letterSpacing: "2px",
+                  fontWeight: "700"
                 }}
               >
                 📊 Overall Score
@@ -202,24 +203,39 @@ function App() {
 
               <h1
                 style={{
-                  fontSize: "64px",
+                  fontSize: "72px",
                   color: "#ff4f87",
                   margin: "0 0 5px 0",
-                  fontWeight: "800"
+                  fontWeight: "900",
+                  lineHeight: "1.1"
                 }}
               >
-                {overallScore !== null ? `${overallScore}/10` : "--"}
+                {report.totalMarks !== undefined && report.maximumMarks !== undefined 
+                  ? `${report.totalMarks} / ${report.maximumMarks}` 
+                  : "--"}
               </h1>
 
               <div
                 style={{
+                  fontSize: "24px",
+                  color: "#ff4f87",
+                  fontWeight: "700",
+                  marginBottom: "15px"
+                }}
+              >
+                {report.percentage !== undefined ? `${report.percentage}%` : "--"}
+              </div>
+
+              <div
+                style={{
                   display: "inline-block",
-                  padding: "6px 16px",
-                  background: "#ff4f87",
+                  padding: "8px 22px",
+                  background: "linear-gradient(135deg, #ff4f87, #ff6fa5)",
                   color: "white",
-                  borderRadius: "20px",
+                  borderRadius: "25px",
                   fontWeight: "bold",
-                  fontSize: "15px"
+                  fontSize: "16px",
+                  boxShadow: "0 4px 10px rgba(255,79,135,0.3)"
                 }}
               >
                 ⭐ {report.grade}
@@ -228,26 +244,72 @@ function App() {
 
             {/* Rubric Breakdown */}
             {report.rubricBreakdown && (
-              <div style={{ marginBottom: "30px" }}>
-                <h3 style={{ color: "#ff4f87", marginBottom: "15px", fontSize: "20px", borderBottom: "2px solid #ffd1df", paddingBottom: "5px" }}>
+              <div style={{ marginBottom: "35px" }}>
+                <h3 style={{ color: "#ff4f87", marginBottom: "18px", fontSize: "20px", borderBottom: "2px solid #ffd1df", paddingBottom: "6px", fontWeight: "700" }}>
                   📋 Rubric Breakdown
                 </h3>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "15px" }}>
-                  {Object.entries(report.rubricBreakdown).map(([criterion, feedback]) => (
-                    <div 
-                      key={criterion} 
-                      style={{ 
-                        background: "#fff", 
-                        padding: "16px", 
-                        borderRadius: "15px", 
-                        border: "1px solid #ffd1df",
-                        boxShadow: "0 4px 10px rgba(0,0,0,0.02)"
-                      }}
-                    >
-                      <strong style={{ color: "#ff4f87", display: "block", marginBottom: "6px", fontSize: "16px" }}>{criterion}</strong>
-                      <span style={{ fontSize: "14px", color: "#555", lineHeight: "1.5", display: "block" }}>{feedback}</span>
-                    </div>
-                  ))}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "18px" }}>
+                  {Array.isArray(report.rubricBreakdown) ? (
+                    report.rubricBreakdown.map((item, index) => (
+                      <div 
+                        key={index} 
+                        style={{ 
+                          background: "#fff", 
+                          padding: "18px", 
+                          borderRadius: "18px", 
+                          border: "1px solid #ffd1df",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.02)",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between"
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                            <strong style={{ color: "#ff4f87", fontSize: "16px", fontWeight: "700", marginRight: "10px" }}>
+                              {item.criterion}
+                            </strong>
+                            <span 
+                              style={{ 
+                                background: "#ffeef5", 
+                                color: "#ff4f87", 
+                                padding: "3px 10px", 
+                                borderRadius: "12px", 
+                                fontSize: "13px", 
+                                fontWeight: "bold",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              {item.awardedMarks} / {item.maximumMarks}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: "14px", color: "#555", lineHeight: "1.5", display: "block" }}>
+                            {item.feedback}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    Object.entries(report.rubricBreakdown).map(([criterion, feedback]) => (
+                      <div 
+                        key={criterion} 
+                        style={{ 
+                          background: "#fff", 
+                          padding: "18px", 
+                          borderRadius: "18px", 
+                          border: "1px solid #ffd1df",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.02)"
+                        }}
+                      >
+                        <strong style={{ color: "#ff4f87", display: "block", marginBottom: "6px", fontSize: "16px", fontWeight: "700" }}>
+                          {criterion}
+                        </strong>
+                        <span style={{ fontSize: "14px", color: "#555", lineHeight: "1.5", display: "block" }}>
+                          {feedback}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}

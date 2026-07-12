@@ -168,6 +168,15 @@ async function selectAndDownloadFiles(codeFiles, maxFiles = 8, charLimit = 25000
   return { mergedContent, downloadedPaths };
 }
 
+function getGrade(percentage) {
+  if (percentage >= 97) return "Outstanding";
+  if (percentage >= 90) return "Excellent";
+  if (percentage >= 80) return "Good";
+  if (percentage >= 70) return "Satisfactory";
+  if (percentage >= 60) return "Needs Improvement";
+  return "Poor";
+}
+
 app.post("/evaluate", async (req, res) => {
   try {
     const { githubUrl } = req.body;
@@ -237,21 +246,38 @@ ${mergedContent}
 TASK:
 Evaluate the repository against the Instructor's Evaluation Rubric.
 
-1. Rubric Breakdown: Evaluate each specific criterion defined in the Instructor's Evaluation Rubric. For each criterion found, provide a score and a brief explanation of how that score was determined. If the rubric does not define specific criteria, use: "Correctness", "Code Quality", "Documentation", and "Edge Cases".
-2. Overall Score: Mathematically calculate the overall score out of 10. This score must be a weighted average derived directly from the scores of the individual rubric criteria (using the weights specified in the rubric, or equal weights if none are specified). Do not invent a subjective overall score.
-3. Grade: Assign a performance grade based on the overall score (e.g., "Excellent" for 9-10, "Good" for 7-8.9, "Satisfactory" for 5-6.9, "Needs Improvement" for less than 5).
-4. Strengths: List key positive aspects of the code.
-5. Weaknesses: List areas that need improvement.
-6. Suggestions: Provide actionable improvement steps.
+1. Rubric Breakdown: Evaluate each specific criterion defined in the Instructor's Evaluation Rubric. For each criterion found, provide:
+   - "criterion": The name of the criterion.
+   - "awardedMarks": The marks awarded for this criterion (must be a number).
+   - "maximumMarks": The maximum marks possible for this criterion (must be a number). If the rubric does not define specific maximum marks or weights, split the marks across the criteria so they sum up to 100.
+   - "feedback": A brief explanation of how that score was determined.
+
+   If the rubric does not define specific criteria, use the following default criteria and maximum marks:
+   - "Correctness" (maximumMarks: 25)
+   - "Code Quality" (maximumMarks: 25)
+   - "Documentation" (maximumMarks: 25)
+   - "Edge Cases" (maximumMarks: 25)
+
+2. Strengths: List key positive aspects of the code.
+3. Weaknesses: List areas that need improvement.
+4. Suggestions: Provide actionable improvement steps.
 
 You MUST return ONLY a valid JSON object matching this structure:
 {
-  "overallScore": 8.5,
-  "grade": "Good",
-  "rubricBreakdown": {
-    "Criterion Name 1": "Score & feedback for Criterion 1...",
-    "Criterion Name 2": "Score & feedback for Criterion 2..."
-  },
+  "rubricBreakdown": [
+    {
+      "criterion": "Criterion Name 1",
+      "awardedMarks": 14,
+      "maximumMarks": 15,
+      "feedback": "Feedback for Criterion 1..."
+    },
+    {
+      "criterion": "Criterion Name 2",
+      "awardedMarks": 19,
+      "maximumMarks": 20,
+      "feedback": "Feedback for Criterion 2..."
+    }
+  ],
   "strengths": [
     "strength 1",
     "strength 2"
@@ -267,11 +293,11 @@ You MUST return ONLY a valid JSON object matching this structure:
 }
 
 CRITICAL RULES:
-1. Do not use markdown wrappers like \`\`\`json or \`\`\` in your response.
-2. Return ONLY the JSON object. Do not include any conversational preamble or postscript.
-3. Every field ("overallScore", "grade", "rubricBreakdown", "strengths", "weaknesses", "suggestions") MUST be present in the returned JSON object.
-4. Empty lists must be represented as empty arrays [], never as missing or null fields.
-5. Do not include any nested objects inside "rubricBreakdown" other than a flat key-value mapping of strings.
+1. Do NOT calculate or return overallScore, percentage, or grade in your JSON response. These are computed on the backend.
+2. Do not use markdown wrappers like \`\`\`json or \`\`\` in your response.
+3. Return ONLY the JSON object. Do not include any conversational preamble or postscript.
+4. Every field ("rubricBreakdown", "strengths", "weaknesses", "suggestions") MUST be present in the returned JSON object.
+5. Empty lists must be represented as empty arrays [], never as missing or null fields.
 `;
 
     console.log("Sending evaluation request to Groq...");
@@ -301,38 +327,93 @@ CRITICAL RULES:
       throw new Error(`Failed to parse extracted JSON: ${parseError.message}`);
     }
 
-    // Sanitize and normalize report structure to guarantee contract safety for frontend
+    // Normalize and extract rubricBreakdown array safely
+    let rubricBreakdown = [];
+    if (Array.isArray(rawReport.rubricBreakdown)) {
+      rubricBreakdown = rawReport.rubricBreakdown.map(item => ({
+        criterion: item.criterion || "Unnamed Criterion",
+        awardedMarks: typeof item.awardedMarks === "number" ? item.awardedMarks : (parseFloat(item.awardedMarks) || 0),
+        maximumMarks: typeof item.maximumMarks === "number" ? item.maximumMarks : (parseFloat(item.maximumMarks) || 10),
+        feedback: item.feedback || ""
+      }));
+    } else if (rawReport.rubricBreakdown && typeof rawReport.rubricBreakdown === "object") {
+      // Fallback: convert old object format to new array format
+      rubricBreakdown = Object.entries(rawReport.rubricBreakdown).map(([criterion, feedbackVal]) => {
+        const feedbackStr = typeof feedbackVal === "string" ? feedbackVal : JSON.stringify(feedbackVal);
+        const scoreMatch = feedbackStr.match(/^(\d+)\s*\/\s*(\d+)/);
+        let awarded = 0;
+        let max = 10;
+        let feedback = feedbackStr;
+        if (scoreMatch) {
+          awarded = parseInt(scoreMatch[1], 10);
+          max = parseInt(scoreMatch[2], 10);
+          feedback = feedbackStr.substring(scoreMatch[0].length).replace(/^[:\s-]+/, "");
+        }
+        return {
+          criterion,
+          awardedMarks: awarded,
+          maximumMarks: max,
+          feedback
+        };
+      });
+    } else {
+      rubricBreakdown = [
+        {
+          criterion: "General Evaluation",
+          awardedMarks: 0,
+          maximumMarks: 100,
+          feedback: "Evaluation complete. Rubric breakdown was not structured as expected."
+        }
+      ];
+    }
+
+    // Deterministic Score Calculations
+    const totalMarks = rubricBreakdown.reduce((sum, item) => sum + (Number(item.awardedMarks) || 0), 0);
+    const maximumMarks = rubricBreakdown.reduce((sum, item) => sum + (Number(item.maximumMarks) || 0), 0);
+    const percentage = maximumMarks > 0 ? Math.round((totalMarks / maximumMarks) * 100) : 0;
+    const overallScore = parseFloat((percentage / 10).toFixed(1));
+    const grade = getGrade(percentage);
+
+    // Validation
+    const sumAwarded = rubricBreakdown.reduce((sum, item) => sum + (Number(item.awardedMarks) || 0), 0);
+    const isSumValid = sumAwarded === totalMarks;
+    const isPercentageValid = Math.abs(percentage - (totalMarks / maximumMarks * 100)) <= 0.5;
+    const isOverallScoreValid = Math.abs(overallScore - (percentage / 10)) < 1e-9;
+
+    if (!isSumValid || !isPercentageValid || !isOverallScoreValid) {
+      console.error("Score validation check failed/discrepancy detected:", {
+        isSumValid,
+        isPercentageValid,
+        isOverallScoreValid,
+        computed: { totalMarks, maximumMarks, percentage, overallScore },
+        expectedPercentage: totalMarks / maximumMarks * 100,
+        expectedOverallScore: percentage / 10
+      });
+    }
+
     const sanitizedReport = {
-      overallScore: typeof rawReport.overallScore === "number" 
-        ? rawReport.overallScore 
-        : (parseFloat(rawReport.overallScore) || null),
-      grade: rawReport.grade || "Evaluated",
-      rubricBreakdown: {},
+      overallScore,
+      totalMarks,
+      maximumMarks,
+      percentage,
+      grade,
+      rubricBreakdown,
       strengths: Array.isArray(rawReport.strengths) ? rawReport.strengths : [],
       weaknesses: Array.isArray(rawReport.weaknesses) ? rawReport.weaknesses : [],
       suggestions: Array.isArray(rawReport.suggestions) ? rawReport.suggestions : []
     };
 
-    // Ensure rubricBreakdown has values and is a flat string mapping
-    if (rawReport.rubricBreakdown && typeof rawReport.rubricBreakdown === "object") {
-      for (const [key, val] of Object.entries(rawReport.rubricBreakdown)) {
-        sanitizedReport.rubricBreakdown[key] = typeof val === "string" 
-          ? val 
-          : JSON.stringify(val);
-      }
-    } else {
-      sanitizedReport.rubricBreakdown = {
-        "Evaluation": "Evaluation complete. Rubric breakdown was not structured as expected."
-      };
-    }
-
-    // Improve backend logging for debugging
+    // Logging
     console.log("=== EVALUATION PIPELINE LOGS ===");
     console.log(`- Number of scanned files: ${codeFiles.length}`);
     console.log(`- Number of files selected: ${downloadedPaths.length}`);
     console.log(`- Filenames selected:`, downloadedPaths);
-    console.log(`- Raw AI response:\n${aiText}`);
-    console.log(`- Normalized response:\n`, JSON.stringify(sanitizedReport, null, 2));
+    console.log("--------------------------------");
+    console.log(`Computed Total: ${totalMarks}`);
+    console.log(`Maximum: ${maximumMarks}`);
+    console.log(`Percentage: ${percentage}%`);
+    console.log(`Overall Score: ${overallScore}`);
+    console.log(`Grade: ${grade}`);
     console.log("================================");
 
     res.json({
